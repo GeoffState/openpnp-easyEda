@@ -27,9 +27,12 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FilenameFilter;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import javax.swing.AbstractAction;
@@ -66,13 +69,10 @@ import com.jgoodies.forms.layout.FormLayout;
 import com.jgoodies.forms.layout.FormSpecs;
 import com.jgoodies.forms.layout.RowSpec;
 
-
 @SuppressWarnings("serial")
 public class NamedCSVImporter implements BoardImporter {
     private final static String NAME = "Named CSV";
     private final static String DESCRIPTION = "Import Named Comma Separated Values Files.";
-
-
 
     private Board board;
     private File topFile, bottomFile;
@@ -115,14 +115,13 @@ public class NamedCSVImporter implements BoardImporter {
             {"DESIGNATOR", "PART", "COMPONENT", "REFDES", "REF"};
     private static final String Vals[] = {"VALUE", "VAL", "COMMENT", "COMP_VALUE"};
     private static final String Packs[] = {"FOOTPRINT", "PACKAGE", "PATTERN", "COMP_PACKAGE"};
-    private static final String Xs[] = {"X", "X (MM)", "REF X", "POSX", "REF-X(MM)", "REF-X(MIL)", "SYM_X"};
-    private static final String Ys[] = {"Y", "Y (MM)", "REF Y", "POSY", "REF-Y(MM)", "REF-Y(MIL)", "SYM_Y"};
+    private static final String Xs[] = {"X", "X (MM)", "REF X", "POSX", "REF-X(MM)", "REF-X(MIL)", "SYM_X", "MID X"};
+    private static final String Ys[] = {"Y", "Y (MM)", "REF Y", "POSY", "REF-Y(MM)", "REF-Y(MIL)", "SYM_Y", "MID Y"};
     private static final String Rots[] = {"ROTATION", "ROT", "ROTATE", "SYM_ROTATE"};
     private static final String TBs[] = {"LAYER", "SIDE", "TB", "SYM_MIRROR"};
     private static final String Heights[] = {"HEIGHT", "HEIGHT(MIL)", "HEIGHT(MM)"};
-    private static final String Comments[] = {"ADDCOMMENT"};
     //////////////////////////////////////////////////////////
-    static private int Ref = -1, Val = -1, Pack = -1, X = -1, Y = -1, Rot = -1, TB = -1, HT = -1, Comment = -1,
+    static private int Ref = -1, Val = -1, Pack = -1, X = -1, Y = -1, Rot = -1, TB = -1, HT = -1,
             Len = 0;
     static private int units_mils_x = 0, units_mils_y = 0, units_mils_height = 0; // set if units
                                                                                   // are in mils not
@@ -172,7 +171,6 @@ public class NamedCSVImporter implements BoardImporter {
             // the following fields are optional
             HT = checkCSV(Heights, str); // optional height field
             TB = checkCSV(TBs, str); // optional top/bottom layer field
-            Comment = checkCSV(Comments, str); // optional comment field
 
             Len = Ref <= Len ? Len : Ref;
             Len = Val <= Len ? Len : Val;
@@ -193,7 +191,6 @@ public class NamedCSVImporter implements BoardImporter {
         Logger.trace("checkCSV: Rot = " + Rot);
         Logger.trace("checkCSV: TB = " + TB);
         Logger.trace("checkCSV: HT = " + HT);
-        Logger.trace("checkCSV: Comment = " + Comment);
         Ref = -1;
         Val = -1;
         Pack = -1;
@@ -202,7 +199,6 @@ public class NamedCSVImporter implements BoardImporter {
         Rot = -1;
         TB = -1;
         HT = -1;
-        Comment = -1;
         Len = 0;
         return false;
     }
@@ -260,6 +256,28 @@ public class NamedCSVImporter implements BoardImporter {
         return false;
     }
 
+    /**
+     * This method checks whether a file starts with a byte order mark. UTF-16 encoding
+     */
+    public static String encoding(File file) {
+        int[] bomSignature1 = {255, 254}; // UTF-16, little-endian
+        int[] bomSignature2 = {254, 255}; // UTF-16, big-endian
+        int[] headerBytes = new int[2];
+        
+        try (InputStream inputStream = new FileInputStream(file);) {
+            headerBytes[0] = inputStream.read();
+            headerBytes[1] = inputStream.read();
+            if (Arrays.equals(headerBytes, bomSignature1) 
+                    || Arrays.equals(headerBytes, bomSignature2)) {
+               return "UTF-16";
+                }
+            } 
+        catch (IOException ex) {
+            ex.printStackTrace();
+        }
+        return "ISO-8859-1";
+    }
+    
     /*
      * CSVParser csvParser = new CSVParser( new FileInputStream("datei.csv") ); for ( String as[];
      * (as = csvParser.getLine()) != null; ) if(as.length<=Len) continue; else System.out.println(
@@ -268,9 +286,10 @@ public class NamedCSVImporter implements BoardImporter {
     //////////////////////////////////////////////////////////
 
     private static List<Placement> parseFile(File file, boolean createMissingParts,
-            boolean updateHeights) throws Exception {
-        BufferedReader reader =
-                new BufferedReader(new InputStreamReader(new FileInputStream(file), "ISO-8859-1"));
+            boolean updateHeights) throws Exception {        
+        BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), 
+                encoding(file)));           
+        
         ArrayList<Placement> placements = new ArrayList<>();
         String line;
 
@@ -368,10 +387,6 @@ public class NamedCSVImporter implements BoardImporter {
 
                 }
 
-                if(Comment != -1) {
-                    placement.setComments(as[Comment]);
-                }
-
                 char c = 0;
                 if (TB != -1) {
                     c = as[TB].toUpperCase().charAt(0);
@@ -408,7 +423,7 @@ public class NamedCSVImporter implements BoardImporter {
                     new RowSpec[] {FormSpecs.RELATED_GAP_ROWSPEC, FormSpecs.DEFAULT_ROWSPEC,
                             FormSpecs.RELATED_GAP_ROWSPEC, FormSpecs.DEFAULT_ROWSPEC,}));
 
-            JLabel lblTopFilemnt = new JLabel("Centroid File (.csv)");
+            JLabel lblTopFilemnt = new JLabel("Centeroid File (.csv)");
             panel.add(lblTopFilemnt, "2, 2, right, default");
 
             textFieldTopFile = new JTextField();
